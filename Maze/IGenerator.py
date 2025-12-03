@@ -48,12 +48,3 @@ class IGenerator(ABC):
         Recombine two genomes and return a new offspring genome.
         """
         pass
-
-    @abstractmethod
-    def evaluate(self, grid: np.ndarray) -> float:
-        """
-        Evaluate the maze's standalone structural quality.
-        NOTE: This is for baseline evaluation only — not solver fitness.
-        (Used in Stage 1 to pre-fill MAP-Elites)
-        """
-        pass

@@ -1,3 +1,4 @@
+# Genotype generator classes
 from .IGenerator import IGenerator
 
 from typing import Any
@@ -23,8 +24,11 @@ class PerlinMazeGenerator(IGenerator):
         # Threshold for wall generation
         wall_threshold: float = 0.4,
         # Threshold for checkpoint generation
-        checkpoint_low: float = 0.65,
-        checkpoint_high: float = 0.8,
+        checkpoint_low: float = 0.3,
+        checkpoint_high: float = 0.6,
+        cp_ratio: float = 0.05,
+        min_cp: int = 2,
+        max_cp: int = 5, 
         # Noise parameter
         smooth_steps: int = 3,
         # Get consistent result with same seeds
@@ -35,6 +39,9 @@ class PerlinMazeGenerator(IGenerator):
         self.wall_threshold = wall_threshold
         self.checkpoint_low = checkpoint_low
         self.checkpoint_high = checkpoint_high
+        self.cp_ratio = cp_ratio
+        self.min_cp = min_cp
+        self.max_cp = max_cp
         self.smooth_steps = smooth_steps
         self.rng = rng or np.random.default_rng()
 
@@ -77,10 +84,11 @@ class PerlinMazeGenerator(IGenerator):
 
     def initialize_genome(self) -> np.ndarray:
         """
-        Create a maze genome using smoothed noise:
-            - values below wall_threshold become walls (1)
-            - values above threshold are free (0)
-            - a mid–high band becomes checkpoints (2)
+        Create A Maze Genome Using Smoothed Noise.
+
+        0 = Free
+        1 = Wall
+        2 = Checkpoint
         """
         h, w = self._height, self._width
         noise = self._perlin_like_noise()
@@ -90,21 +98,58 @@ class PerlinMazeGenerator(IGenerator):
         # Walls
         grid[noise < self.wall_threshold] = 1
 
-        # Checkpoints in a band of higher noise values, only on free cells
-        cp_mask = (
+        # All Free Cells (Candidates For Checkpoints)
+        free_positions = np.argwhere(grid == 0)
+        num_free = free_positions.shape[0]
+
+        if num_free == 0:
+            # Extremely Degenerate Case: All Walls
+            r = self.rng.integers(0, h)
+            c = self.rng.integers(0, w)
+            grid[r, c] = 0
+            free_positions = np.array([[r, c]])
+            num_free = 1
+
+        # Decide How Many Checkpoints To Place This Time
+        target = int(self.cp_ratio * num_free)
+        k = max(self.min_cp, min(self.max_cp, target))
+        if k > num_free:
+            k = num_free
+
+        # Prefer Free Cells With Higher Noise Values
+        # (Optionally Only Consider Cells In [checkpoint_low, checkpoint_high])
+        band_mask = (
             (noise >= self.checkpoint_low) &
             (noise < self.checkpoint_high) &
             (grid == 0)
         )
-        grid[cp_mask] = 2
+        band_positions = np.argwhere(band_mask)
 
-        # Checkpoint checking, must be at least one cp.
-        if not (grid == 2).any():
-            r_idx = self.rng.integers(0, h)
-            c_idx = self.rng.integers(0, w)
-            grid[r_idx, c_idx] = 2
+        if band_positions.shape[0] >= k:
+            # Enough Cells In The Band: Use Only Them
+            candidates = band_positions
+            candidate_noise = noise[band_mask].flatten()
+        else:
+            # Not Enough Cells In Band: Fall Back To All Free Cells
+            candidates = free_positions
+            candidate_noise = noise[grid == 0].flatten()
+
+        # Sort Candidates By Noise Descending, Take Top k
+        order = np.argsort(-candidate_noise)
+        chosen_idx = order[:k]
+
+        for idx in chosen_idx:
+            r, c = candidates[idx]
+            grid[int(r), int(c)] = 2
+
+        # Ensure Outer Border Is Walls
+        grid[0, :] = 1
+        grid[-1, :] = 1
+        grid[:, 0] = 1
+        grid[:, -1] = 1
 
         return grid
+
 
     def decode(self, genome: Any) -> np.ndarray:
         """
@@ -147,15 +192,6 @@ class PerlinMazeGenerator(IGenerator):
         mask = self.rng.random(g1.shape) < 0.5
         child = np.where(mask, g1, g2)
         return child.astype(np.int8)
-
-    def evaluate(self, grid: Any) -> float:
-        grid = np.asarray(grid, dtype=np.int8)
-        free_ratio = np.mean(grid == 0)
-        wall_ratio = np.mean(grid == 1)
-        checkpoint_count = int(np.sum(grid == 2))
-
-        score = free_ratio - 0.3 * wall_ratio + 0.05 * checkpoint_count
-        return float(score)
     
 
 class DFSMazeGenerator(IGenerator):
@@ -174,7 +210,7 @@ class DFSMazeGenerator(IGenerator):
     def __init__(
         self,
         size: int,
-        checkpoint_ratio: float = 0.02,
+        checkpoint_ratio: float = 0.05,
         rng: np.random.Generator | None = None,
     ) -> None:
         """
@@ -242,7 +278,7 @@ class DFSMazeGenerator(IGenerator):
             grid[wall_r, wall_c] = 0
             grid[nr, nc] = 0
 
-        # Optionally: Ensure Outer Border Is Walls
+        # Ensure Outer Border Is Walls
         grid[0, :] = 1
         grid[-1, :] = 1
         grid[:, 0] = 1
@@ -315,13 +351,3 @@ class DFSMazeGenerator(IGenerator):
         mask = self.Rng.random(g1.shape) < 0.5
         child = np.where(mask, g1, g2)
         return child.astype(np.int8)
-
-    def evaluate(self, grid: Any) -> float:
-        grid = np.asarray(grid, dtype=np.int8)
-        free_ratio = np.mean(grid == 0)
-        wall_ratio = np.mean(grid == 1)
-        checkpoint_count = int(np.sum(grid == 2))
-
-        # Simple Heuristic: Prefer Some Free Space, Not Too Many Walls, Some Checkpoints
-        score = free_ratio - 0.3 * wall_ratio + 0.05 * checkpoint_count
-        return float(score)
