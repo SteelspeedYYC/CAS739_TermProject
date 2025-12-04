@@ -25,10 +25,10 @@ class PerlinMazeGenerator(IGenerator):
         wall_threshold: float = 0.4,
         # Threshold for checkpoint generation
         checkpoint_low: float = 0.3,
-        checkpoint_high: float = 0.6,
+        checkpoint_high: float = 0.5,
         cp_ratio: float = 0.05,
-        min_cp: int = 2,
-        max_cp: int = 5, 
+        min_cp: int = 1,
+        max_cp: int = 3, 
         # Noise parameter
         smooth_steps: int = 3,
         # Get consistent result with same seeds
@@ -210,7 +210,7 @@ class DFSMazeGenerator(IGenerator):
     def __init__(
         self,
         size: int,
-        checkpoint_ratio: float = 0.05,
+        checkpoint_ratio: float = 0.03,
         rng: np.random.Generator | None = None,
     ) -> None:
         """

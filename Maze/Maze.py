@@ -298,7 +298,7 @@ class Maze:
         path_len = self._bfs_with_checkpoints()
 
         if path_len is None:
-            return -500.0, 0
+            return -500.0, 1000
         
         cp_count = self.checkpoint_count()
         steps = float(path_len)

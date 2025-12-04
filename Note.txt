@@ -1,0 +1,26 @@
+CA maze method - Overlapping with PN a bit, del
+Baseline Solution - bFS
+
+Decreasing the CP#
+
+Solver GP - almost impossible for 1 - multi condition
+Try A*
+# Try Evo theta
+
+A* - No evo space, init seeds meet the best performance already
+
+Heuristic Greedy with theta evo?
+
+Heuristic Greedy is very weak, try adding penalty
+Enlarge the step limit
+See performance on easiest maze
+
+Evo Greedy first -> then do CoEV
+# Evo steps on Greedy will not count into whole CoEV step
+# Start CoEV until cont. success happen on easiest maze
+# 2 Phases
+
+SET Difficulty steps for Phase 1 (solver only)
+
+Change CP to unnecessary -> huge bonus mark, but not success condition
+# But still necessary for baseline
