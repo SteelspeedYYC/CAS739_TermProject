@@ -1,5 +1,4 @@
 # Class to combine grid and feature to become a maze
-from typing import Tuple
 import numpy as np
 from collections import deque
 
@@ -18,26 +17,26 @@ class Maze:
 
     def __init__(self, grid: np.ndarray) -> None:
         # Store Grid As Int8
-        self.Grid = np.asarray(grid, dtype=np.int8)
+        self.grid = np.asarray(grid, dtype=np.int8)
 
         # Size Information
-        self.Height, self.Width = self.Grid.shape
+        self.height, self.width = self.grid.shape
         # Max Manhattan Distance Between Two Cells In The Grid
-        max_manhattan = (self.Height - 1) + (self.Width - 1)
+        max_manhattan = (self.height - 1) + (self.width - 1)
         # Use One Third Of It As Default Threshold
         self.MinStartGoalDistance = max_manhattan / 4.0
 
         # Store Start And Goal
         start, goal = self._sample_start_goal()
-        self.Start = start
-        self.Goal = goal
+        self.start = start
+        self.goal = goal
 
         # Basic Validation
         self._validate_coordinates()
 
 
     # Sample Random Start / Goal On Free Cells
-    def _sample_start_goal(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    def _sample_start_goal(self) -> tuple[tuple[int, int], tuple[int, int]]:
         """
         Sample Two Distinct Free Cells As Start And Goal.
 
@@ -45,7 +44,7 @@ class Maze:
         A Minimum Manhattan Distance Between Start And Goal
         Is Enforced If MinStartGoalDistance > 0.
         """
-        free_positions = np.argwhere(self.Grid == 0)
+        free_positions = np.argwhere(self.grid == 0)
         num_free = free_positions.shape[0]
 
         if num_free < 2:
@@ -76,14 +75,14 @@ class Maze:
         Does Not Enforce Free Cell Here Because You May Want
         To Fix Or Override It In Another Step.
         """
-        sr, sc = self.Start
-        gr, gc = self.Goal
+        sr, sc = self.start
+        gr, gc = self.goal
 
-        if not (0 <= sr < self.Height and 0 <= sc < self.Width):
-            raise ValueError(f"Start Coordinate {self.Start} Is Out Of Bounds")
+        if not (0 <= sr < self.height and 0 <= sc < self.width):
+            raise ValueError(f"Start Coordinate {self.start} Is Out Of Bounds")
 
-        if not (0 <= gr < self.Height and 0 <= gc < self.Width):
-            raise ValueError(f"Goal Coordinate {self.Goal} Is Out Of Bounds")
+        if not (0 <= gr < self.height and 0 <= gc < self.width):
+            raise ValueError(f"Goal Coordinate {self.goal} Is Out Of Bounds")
 
 
     # Simple Structural Features
@@ -91,19 +90,19 @@ class Maze:
         """
         Return The Ratio Of Free Cells (Value == 0).
         """
-        return float(np.mean(self.Grid == 0))
+        return float(np.mean(self.grid == 0))
 
     def wall_ratio(self) -> float:
         """
         Return The Ratio Of Walls (Value == 1).
         """
-        return float(np.mean(self.Grid == 1))
+        return float(np.mean(self.grid == 1))
 
     def checkpoint_count(self) -> int:
         """
         Return The Number Of Checkpoint Cells (Value == 2).
         """
-        return int(np.sum(self.Grid == 2))
+        return int(np.sum(self.grid == 2))
 
 
     # Helper, get all checkpoints for baseline algo to evaluate the maze
@@ -111,7 +110,7 @@ class Maze:
         """
         Return A List Of All Checkpoint Coordinates (Value == 2).
         """
-        positions = np.argwhere(self.Grid == 2)
+        positions = np.argwhere(self.grid == 2)
         checkpoints: list[tuple[int, int]] = []
         for r, c in positions:
             checkpoints.append((int(r), int(c)))
@@ -123,13 +122,13 @@ class Maze:
         """
         Simple BFS From Start To Goal Ignoring Checkpoints.
         """
-        sr, sc = self.Start
-        gr, gc = self.Goal
+        sr, sc = self.start
+        gr, gc = self.goal
 
-        if self.Grid[sr, sc] == 1 or self.Grid[gr, gc] == 1:
+        if self.grid[sr, sc] == 1 or self.grid[gr, gc] == 1:
             return None
 
-        visited = np.zeros((self.Height, self.Width), dtype=bool)
+        visited = np.zeros((self.height, self.width), dtype=bool)
         q = deque()
         q.append((sr, sc, 0))
         visited[sr, sc] = True
@@ -143,8 +142,8 @@ class Maze:
 
             for dr, dc in directions:
                 nr, nc = r + dr, c + dc
-                if 0 <= nr < self.Height and 0 <= nc < self.Width:
-                    if not visited[nr, nc] and self.Grid[nr, nc] != 1:
+                if 0 <= nr < self.height and 0 <= nc < self.width:
+                    if not visited[nr, nc] and self.grid[nr, nc] != 1:
                         visited[nr, nc] = True
                         q.append((nr, nc, dist + 1))
 
@@ -171,11 +170,11 @@ class Maze:
         """
         from collections import deque
 
-        sr, sc = self.Start
-        gr, gc = self.Goal
+        sr, sc = self.start
+        gr, gc = self.goal
 
         # Start Or Goal Cannot Be A Wall
-        if self.Grid[sr, sc] == 1 or self.Grid[gr, gc] == 1:
+        if self.grid[sr, sc] == 1 or self.grid[gr, gc] == 1:
             return None
 
         # Collect Checkpoints
@@ -195,12 +194,12 @@ class Maze:
 
         # Initial Mask: If Start Itself Is A Checkpoint, Mark It
         start_mask = 0
-        if self.Grid[sr, sc] == 2 and (sr, sc) in cp_index:
+        if self.grid[sr, sc] == 2 and (sr, sc) in cp_index:
             start_mask = 1 << cp_index[(sr, sc)]
 
         # Visited[Row, Col, Mask] = Whether This State Was Seen
         visited = np.zeros(
-            (self.Height, self.Width, 1 << k),
+            (self.height, self.width, 1 << k),
             dtype=bool,
         )
 
@@ -219,14 +218,14 @@ class Maze:
 
             for dr, dc in directions:
                 nr, nc = r + dr, c + dc
-                if 0 <= nr < self.Height and 0 <= nc < self.Width:
+                if 0 <= nr < self.height and 0 <= nc < self.width:
                     # Cannot Walk Into Walls
-                    if self.Grid[nr, nc] == 1:
+                    if self.grid[nr, nc] == 1:
                         continue
 
                     new_mask = mask
                     # If This Cell Is A Checkpoint, Update Mask
-                    if self.Grid[nr, nc] == 2:
+                    if self.grid[nr, nc] == 2:
                         idx = cp_index.get((nr, nc))
                         if idx is not None:
                             new_mask = mask | (1 << idx)
@@ -251,8 +250,8 @@ class Maze:
         Returns:
             A Small Positive Value; Larger Means More Open / Junction-Rich.
         """
-        g = self.Grid
-        h, w = self.Height, self.Width
+        g = self.grid
+        h, w = self.height, self.width
 
         total_walkable = 0
         sum_degree = 0
@@ -284,7 +283,7 @@ class Maze:
         avg_deg = sum_degree / total_walkable
         junction_ratio = high_degree_count / total_walkable
 
-        return float(0.8 * avg_deg + ((self.Height - 1) * (self.Width - 1) * self.free_ratio()) * junction_ratio)
+        return float(0.8 * avg_deg + ((self.height - 1) * (self.width - 1) * self.free_ratio()) * junction_ratio)
 
 
 
@@ -332,15 +331,15 @@ class Maze:
         }
 
         lines: list[str] = []
-        for r in range(self.Height):
+        for r in range(self.height):
             row_chars: list[str] = []
-            for c in range(self.Width):
-                if (r, c) == self.Start:
+            for c in range(self.width):
+                if (r, c) == self.start:
                     row_chars.append(start_symbol)
-                elif (r, c) == self.Goal:
+                elif (r, c) == self.goal:
                     row_chars.append(goal_symbol)
                 else:
-                    v = int(self.Grid[r, c])
+                    v = int(self.grid[r, c])
                     row_chars.append(mapping.get(v, "?"))
             lines.append("".join(row_chars))
 
