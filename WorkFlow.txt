@@ -1,0 +1,53 @@
+初始化 maze / archive
+
+迷宫大小固定 16×16
+
+用 PN 和 DFS 各 100 张，共 200 张 seed
+
+用 强制 CP 的 evaluate_structure 当作 maze 的 baseline fitness
+
+插入 Map-Elites archive
+
+选 100 张“可解”的混合 maze 给 solver 做 Phase 1 训练
+
+条件：baseline_fitness > -500（说明 BFS+CP 可以走通）
+
+用 无 CP 强制的 evaluate_structure_noCP 作为比较 baseline
+
+用我们刚写的 SolverPopulation.evaluate_on_envs 做 51 代 solver 训练（只进化 solver，不动 maze）
+
+用 Phase 1 得到的 best solver 给所有 maze 赋 solver_fitness
+
+用和 evaluate_on_envs 一样的公式算 rel_score，存到 indiv.solver_fitness
+
+开始 20 轮 CoEV：每轮一小步 maze + 一小步 solver
+
+每一轮：
+
+先用 use_solver_fitness=True 做一两步 step_evolution（maze 进化）
+
+再在当前 map 上对 solver 做一代 ES 进化
+
+然后用当前 best solver 再次更新所有 maze 的 solver_fitness
+
+过程中记录：
+
+每一代：
+
+solver 侧：
+
+随机取 20 张“可解” map
+
+记录 best solver 在这 20 张上的：
+
+平均 raw steps
+
+平均 rel_score（我们的相对 fitness）
+
+baseline_noCP 的平均步数
+
+maze 侧：
+
+archive 里所有个体的平均 baseline_fitness（含 -500）
+
+archive 里所有个体的平均 solver_fitness（含差的）

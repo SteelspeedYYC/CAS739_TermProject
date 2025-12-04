@@ -71,32 +71,36 @@ def evaluate_on_envs(
         for env in envs:
             maze = Maze(env.genome)
 
-            # Baseline: BFS all-CP
+            # 1) baseline: shortest path S->G, ignore CP
             base_fit, baseline_steps = maze.evaluate_structure_noCP()
             baseline_steps = float(max(1.0, baseline_steps))
 
-            # Solver stats: raw_steps & cp_ratio
+            # 2) solver run: raw_steps & cp_ratio
             success, raw_steps, cp_ratio = solver.solve_with_stats(maze)
-
             raw_steps = float(max(1.0, raw_steps))
             cp_ratio = float(np.clip(cp_ratio, 0.0, 1.0))
 
-            # Compare the speed
-            # Sometimes the solver will take less steps since CP is just a bonus for solver.
+            # fail condition
+            if not success:
+                max_steps = int(solver.max_steps_factor * maze.height * maze.width)
+                raw_steps = float(max_steps)
+                # fail condition will not count cp_ratio
+                cp_factor = (1.0 - alpha_cp)
+            else:
+                # If success, count CP ratio
+                cp_factor = (1.0 - alpha_cp) + alpha_cp * cp_ratio
+
+            # 3) Find speed ratio baseline / solver
             speed_ratio = baseline_steps / raw_steps
 
-            # CP will be setted as a soft bonus, but not a limitation: (1-alpha) + alpha * cp_ratio
-            cp_factor = (1.0 - alpha_cp) + alpha_cp * cp_ratio
-
+            # 4) Use Multi
             rel_score = speed_ratio * cp_factor
-            # Cap At 1.0: Solver Can't Exceed "Best Possible"
             rel_score = float(np.clip(rel_score, 0.0, 1.0))
 
             total_score += rel_score
             count += 1
 
         avg_score = total_score / max(count, 1)
-        # ES -> fitness the large the better.
         s.fitness = avg_score
 
 
