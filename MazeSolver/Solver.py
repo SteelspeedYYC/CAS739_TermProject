@@ -1,7 +1,7 @@
 import heapq
 import numpy as np
 from Maze.Maze import Maze
-from ISolver import ISolver
+from .ISolver import ISolver
 
 
 class AStarSolver(ISolver):

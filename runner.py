@@ -182,8 +182,8 @@ def run_coevolution_experiment(
 
     print(f"[Init] Archive initialized with up to {n_init_mazes} mazes.")
 
-    # 3) Pick 100 solvable mazes for Phase 1
-    train_envs_phase1 = pick_solvable_envs(archive, rng, k=100)
+    # 3) Pick 50 solvable mazes for Phase 1
+    train_envs_phase1 = pick_solvable_envs(archive, rng, k=50)
     print(f"[Phase1] Picked {len(train_envs_phase1)} solvable mazes for initial solver training.")
 
     # 4) init solver population
@@ -227,7 +227,7 @@ def run_coevolution_experiment(
 
     # CoEV loop
 
-    n_coev_gens = 20
+    n_coev_gens = 50
 
     solver_logs: list[dict] = []
     maze_logs: list[dict] = []
