@@ -39,6 +39,7 @@ def evaluate_on_envs(
     population: list[SolverIndividual],
     envs: list[Individual],
     rng: np.random.Generator,
+    alpha_cp: float = 0.5,
 ) -> None:
     """
     Evaluate Each SolverIndividual On A List Of Maze Environments.
@@ -59,6 +60,9 @@ def evaluate_on_envs(
             s.fitness = 0.0
         return
 
+    alpha_cp = float(alpha_cp)
+    alpha_cp = max(0.0, min(1.0, alpha_cp))
+
     for s in population:
         solver = GreedySolver(theta=s.theta)
         total_score = 0.0
@@ -67,32 +71,33 @@ def evaluate_on_envs(
         for env in envs:
             maze = Maze(env.genome)
 
-            # Baseline evaluation: returns (fitness, steps)
-            _, baseline_steps = maze.evaluate_structure()
+            # Baseline: BFS all-CP
+            base_fit, baseline_steps = maze.evaluate_structure_noCP()
+            baseline_steps = float(max(1.0, baseline_steps))
 
-            # baseline_steps <= 0, skip
-            if baseline_steps <= 0:
-                continue
+            # Solver stats: raw_steps & cp_ratio
+            success, raw_steps, cp_ratio = solver.solve_with_stats(maze)
 
-            success, solver_steps = solver.solve(maze)
-            solver_steps = float(solver_steps)
+            raw_steps = float(max(1.0, raw_steps))
+            cp_ratio = float(np.clip(cp_ratio, 0.0, 1.0))
 
-            if solver_steps <= 0:
-                continue
+            # Compare the speed
+            # Sometimes the solver will take less steps since CP is just a bonus for solver.
+            speed_ratio = baseline_steps / raw_steps
 
-            # Relative performance: smaller solver_steps => larger ratio
-            ratio = baseline_steps / solver_steps
+            # CP will be setted as a soft bonus, but not a limitation: (1-alpha) + alpha * cp_ratio
+            cp_factor = (1.0 - alpha_cp) + alpha_cp * cp_ratio
 
+            rel_score = speed_ratio * cp_factor
             # Cap At 1.0: Solver Can't Exceed "Best Possible"
-            score_env = min(1.0, ratio)
+            rel_score = float(np.clip(rel_score, 0.0, 1.0))
 
-            total_score += score_env
+            total_score += rel_score
             count += 1
 
-        if count == 0:
-            s.fitness = 0.0
-        else:
-            s.fitness = total_score / count  # In [0, 1]
+        avg_score = total_score / max(count, 1)
+        # ES -> fitness the large the better.
+        s.fitness = avg_score
 
 
 def evolve_es(

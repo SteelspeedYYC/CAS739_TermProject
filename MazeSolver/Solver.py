@@ -170,7 +170,7 @@ class GreedySolver(ISolver):
     def __init__(
         self,
         theta: np.ndarray,
-        max_steps_factor: float = 5.0,
+        max_steps_factor: float = 4.0,
     ) -> None:
         """
         theta: Parameter Vector For The Heuristic h_theta(s).
@@ -348,7 +348,6 @@ class GreedySolver(ISolver):
 
 
         # Failed To Find Valid Path Within Step Limit
-
         total_cp = len(checkpoints)
         if total_cp > 0:
             cp_ratio = visited_cp_count / float(total_cp)
@@ -369,3 +368,102 @@ class GreedySolver(ISolver):
         effective_steps = max(1, min(max_steps, effective_steps))
 
         return False, effective_steps
+    
+    # Add another solve func, can also return cp pass ratio
+    def solve_with_stats(self, maze: Maze) -> tuple[bool, int, float]:
+        """
+        Same As solve(), But Also Return cp_ratio:
+
+            success: Whether Goal Is Reached.
+            steps:   The 'raw' step count before CP bonus.
+            cp_ratio: Fraction Of Checkpoints Visited (0~1).
+        """
+        checkpoints = maze._get_checkpoints()
+        k = len(checkpoints)
+        cp_index: dict[tuple[int, int], int] = {
+            (r, c): i for i, (r, c) in enumerate(checkpoints)
+        }
+
+        sr, sc = maze.start
+        gr, gc = maze.goal
+
+        if maze.grid[sr, sc] == 1 or maze.grid[gr, gc] == 1:
+            return False, 0, 0.0
+
+        start_mask = 0
+        if k > 0 and (sr, sc) in cp_index:
+            start_mask = 1 << cp_index[(sr, sc)]
+
+        max_steps = int(self.max_steps_factor * maze.height * maze.width)
+        if max_steps <= 0:
+            max_steps = maze.height * maze.width
+
+        r, c = sr, sc
+        mask = start_mask
+        steps = 0
+
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        visited_cp_count = bin(start_mask).count("1")
+        min_goal_dist = abs(sr - gr) + abs(sc - gc)
+
+        prev_pos: tuple[int, int] | None = None
+        backtrack_penalty = 5.0
+
+        while steps < max_steps:
+            if (r, c) == (gr, gc):
+                total_cp = len(checkpoints)
+                cp_ratio = (
+                    visited_cp_count / float(total_cp)
+                    if total_cp > 0 else 0.0
+                )
+                return True, steps, cp_ratio
+
+            best_h = None
+            best_state: tuple[int, int, int] | None = None
+
+            for dr, dc in directions:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < maze.height and 0 <= nc < maze.width:
+                    if maze.grid[nr, nc] == 1:
+                        continue
+
+                    new_mask = mask
+                    if k > 0 and maze.grid[nr, nc] == 2:
+                        idx = cp_index.get((nr, nc))
+                        if idx is not None:
+                            new_mask = mask | (1 << idx)
+
+                    remaining = self._remaining_checkpoints_from_mask(
+                        checkpoints, new_mask
+                    )
+                    h = self._heuristic(maze, nr, nc, remaining)
+
+                    if prev_pos is not None and (nr, nc) == prev_pos:
+                        h += backtrack_penalty
+
+                    if best_h is None or h < best_h:
+                        best_h = h
+                        best_state = (nr, nc, new_mask)
+
+            if best_state is None:
+                break
+
+            prev_pos = (r, c)
+            r, c, mask = best_state
+            steps += 1
+
+            visited_cp_count = max(
+                visited_cp_count,
+                bin(mask).count("1"),
+            )
+
+            d_goal = abs(r - gr) + abs(c - gc)
+            if d_goal < min_goal_dist:
+                min_goal_dist = d_goal
+
+        total_cp = len(checkpoints)
+        cp_ratio = (
+            visited_cp_count / float(total_cp)
+            if total_cp > 0 else 0.0
+        )
+        return False, steps, cp_ratio

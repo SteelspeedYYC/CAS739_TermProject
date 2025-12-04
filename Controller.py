@@ -58,7 +58,7 @@ class ExperimentController:
             genome = self.generator.initialize_genome()
 
             maze = Maze(genome)
-            fitness, steps = maze.evaluate_structure()
+            fitness, steps = maze.evaluate_structure_noCP()
             f1, f2 = self._compute_features(maze, steps)
 
             indiv = Individual(
@@ -103,7 +103,7 @@ class ExperimentController:
                 continue
 
             maze = Maze(genome)
-            fitness, steps = maze.evaluate_structure()
+            fitness, steps = maze.evaluate_structure_noCP()
             f1, f2 = self._compute_features(maze, steps)
 
             indiv = Individual(
@@ -177,7 +177,7 @@ class ExperimentController:
 
             # Evaluate Offspring
             maze = Maze(child_genome)
-            fitness, steps = maze.evaluate_structure()
+            fitness, steps = maze.evaluate_structure_noCP()
             f1, f2 = self._compute_features(maze, steps)
 
             child = Individual(
@@ -291,7 +291,7 @@ class ExperimentController:
 
         for ind in all_indiv:
             maze = Maze(ind.genome)
-            _, steps = maze.evaluate_structure()
+            _, steps = maze.evaluate_structure_noCP()
             cp = maze.checkpoint_count()
             scored.append((steps, cp, ind))
 

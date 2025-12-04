@@ -312,6 +312,32 @@ class Maze:
         return fitness, steps
     
 
+    # THE VERSION THAT BASELINE IGNORE CP AS WELL!!!!
+    def evaluate_structure_noCP(self) -> float:
+        """
+        Evaluate Maze By Solving It From Start To Goal While Visiting
+        All Checkpoints At Least Once.
+
+        If There Is No Such Path, Return A Large Negative Penalty.
+        If There Is A Path, Return A Score Based On Path Length.
+        """
+        path_len = self._bfs_simple_shortest_path()
+
+        if path_len is None:
+            return -500.0, 1000
+        
+        cp_count = self.checkpoint_count()
+        steps = float(path_len)
+        free_ratio = self.free_ratio() 
+        space_util_score = 5 * abs(free_ratio - 0.7) # 0.7 is target free cells ratio
+        # PN maze always has worse performance, use juction score to buff it a bit with consideration of diversity
+        juction_score = self._openness_score()
+
+        # Fitness calculate
+        fitness = 2 * steps + 5 * cp_count + 0.5 * juction_score - space_util_score
+        return fitness, steps
+
+
     # Simple ASCII Visualization, just for Debug, not final presentation
     def to_ascii(self, start_symbol: str = "S", goal_symbol: str = "G") -> str:
         """
