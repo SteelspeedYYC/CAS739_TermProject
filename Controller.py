@@ -257,26 +257,55 @@ class ExperimentController:
             sigma=sigma,
         )
 
-    def refresh_solver_fitness(self) -> None:
+    def refresh_solver_fitness(
+        self,
+        alpha_cp: float = 0.5,
+    ) -> None:
         """
-        Use Current Best Solver In The Population To Evaluate
-        Each Maze In The Archive And Write solver_fitness.
+        Use current best solver to evaluate each maze in the archive and
+        write solver_fitness as 'difficulty for the solver'.
 
-        solver_fitness = -steps, Where steps Is Returned By GreedySolver.
-        We Do Not Override It With A Fixed Penalty Here.
+        Steps:
+        1. For each maze, compute baseline_steps via evaluate_structure_noCP().
+        2. Run GreedySolver.solve_with_stats() to get (raw_steps, cp_ratio).
+        3. Compute relative performance rel_score in [0, 1].
+        4. Define difficulty = 1 - rel_score, so higher means harder for solver.
+        5. Store indiv.solver_fitness = difficulty.
         """
         if not self.solver_population:
             return
 
-        # Best Solver By ES Fitness
+        # 取当前 ES 里 fitness 最好的 solver
         best = max(self.solver_population, key=lambda s: s.fitness)
         solver = Solver.GreedySolver(theta=best.theta)
 
+        alpha_cp = float(alpha_cp)
+        alpha_cp = max(0.0, min(1.0, alpha_cp))
+
         for indiv in self.archive.iter_individuals():
             maze = Maze(indiv.genome)
-            success, steps = solver.solve(maze)
-            # steps Already Encodes Partial Progress Even If success=False
-            indiv.solver_fitness = -float(steps)
+
+            # 1) baseline: BFS no-CP
+            _, baseline_steps = maze.evaluate_structure_noCP()
+            baseline_steps = float(max(1.0, baseline_steps))
+
+            # 2) solver stats
+            success, raw_steps, cp_ratio = solver.solve_with_stats(maze)
+            raw_steps = float(max(1.0, raw_steps))
+            cp_ratio = float(np.clip(cp_ratio, 0.0, 1.0))
+
+            # 3) relative performance
+            speed_ratio = baseline_steps / raw_steps
+            cp_factor = (1.0 - alpha_cp) + alpha_cp * cp_ratio
+            rel_score = speed_ratio * cp_factor
+            rel_score = float(np.clip(rel_score, 0.0, 1.0))
+
+            # 4) difficulty for maze selection
+            difficulty = 1.0 - rel_score  # 越难对 solver 越高
+
+            # 5) write back
+            indiv.solver_fitness = difficulty
+
 
 
     # Specially made for early stage solver training

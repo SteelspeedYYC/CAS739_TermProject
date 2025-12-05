@@ -313,29 +313,35 @@ class Maze:
     
 
     # THE VERSION THAT BASELINE IGNORE CP AS WELL!!!!
-    def evaluate_structure_noCP(self) -> float:
+    def evaluate_structure_noCP(self) -> tuple[float, float]:
         """
-        Evaluate Maze By Solving It From Start To Goal While Visiting
-        All Checkpoints At Least Once.
+        Baseline evaluation that ignores checkpoints.
 
-        If There Is No Such Path, Return A Large Negative Penalty.
-        If There Is A Path, Return A Score Based On Path Length.
+        - Use _bfs_simple_shortest_path() from start to goal (no CP requirement).
+        - If unsolvable, return a large negative fitness and a big step count.
+        - If solvable, fitness is a “difficulty” score: larger means harder
+        (longer path, slightly more CP, slightly more open / junction rich).
         """
         path_len = self._bfs_simple_shortest_path()
 
         if path_len is None:
-            return -500.0, 1000
-        
-        cp_count = self.checkpoint_count()
-        steps = float(path_len)
-        free_ratio = self.free_ratio() 
-        space_util_score = 5 * abs(free_ratio - 0.7) # 0.7 is target free cells ratio
-        # PN maze always has worse performance, use juction score to buff it a bit with consideration of diversity
-        juction_score = self._openness_score()
+            # unsolvable maze
+            return -500.0, 1000.0
 
-        # Fitness calculate
-        fitness = 2 * steps + 5 * cp_count + 0.5 * juction_score - space_util_score
-        return fitness, steps
+        steps = float(path_len)
+        cp_count = self.checkpoint_count()
+        free_ratio = self.free_ratio()
+        space_util_score = 5.0 * abs(free_ratio - 0.7)
+        junction_score = self._openness_score()
+
+        fitness = (
+            2.0 * steps
+            + 1.0 * cp_count
+            + 0.5 * junction_score
+            - space_util_score
+        )
+        return float(fitness), steps
+
 
 
     # Simple ASCII Visualization, just for Debug, not final presentation

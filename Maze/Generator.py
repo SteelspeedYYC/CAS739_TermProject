@@ -210,7 +210,7 @@ class DFSMazeGenerator(IGenerator):
     def __init__(
         self,
         size: int,
-        checkpoint_ratio: float = 0.03,
+        checkpoint_ratio: float = 0.01,
         rng: np.random.Generator | None = None,
     ) -> None:
         """
