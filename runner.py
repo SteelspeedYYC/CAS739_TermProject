@@ -184,11 +184,24 @@ def run_coevolution_experiment(
     mu = 10
     theta_dim = 4
     ctrl.initialize_solvers(mu=mu, theta_dim=theta_dim, init_scale=1.0)
+    phase1_logs = {
+        "gen": [],
+        "best_fit": [],
+        "avg_fit": [],
 
-    # 5) Phase 1: 51 pre-training
+        "eval_gen": [],
+        "train_avg_steps": [],
+        "train_sr": [],
+        "train_rel": [],
+        "test_avg_steps": [],
+        "test_sr": [],
+        "test_rel": [],
+    }
+
+    # 5) Phase 1: 21 pre-training
     lambd = 20
     sigma = 0.3
-    p1_trains = 51
+    p1_trains = 21
 
     for gen in range(p1_trains):
         # Use SolverPopulation for fixed envs
@@ -212,6 +225,9 @@ def run_coevolution_experiment(
         avg_fit = sum(fitnesses) / len(fitnesses)
         if gen % 5 == 0:
             print(f"[Phase1 Gen {gen}] solver best={best_fit:.3f}, avg={avg_fit:.3f}")
+            phase1_logs["gen"].append(gen)
+            phase1_logs["best_fit"].append(best_fit)
+            phase1_logs["avg_fit"].append(avg_fit)
 
     # 6) Post phase, send solver score to map
     best_solver = max(ctrl.solver_population, key=lambda s: s.fitness)
@@ -221,7 +237,7 @@ def run_coevolution_experiment(
 
     # CoEV loop
 
-    n_coev_gens = 50
+    n_coev_gens = 80
 
     solver_logs: list[dict] = []
     maze_logs: list[dict] = []
@@ -281,18 +297,26 @@ def run_coevolution_experiment(
 
         # 5) Checking maze with mean of baseline_fitness mean of solver_fitness
         all_indiv = archive.iter_individuals()
-        base_vals = [ind.baseline_fitness for ind in all_indiv]
-        all_indiv = archive.iter_individuals()
-        solver_vals = [
-            ind.solver_fitness
-            for ind in all_indiv
-            if ind.solver_fitness is not None
-        ]
-
-        avg_base_fit = float(sum(base_vals) / len(base_vals)) if base_vals else 0.0
-        avg_solver_fit = (
-            float(sum(solver_vals) / len(solver_vals)) if solver_vals else 0.0
-        )
+        solvable_indivs = [ind for ind in all_indiv if ind.baseline_fitness > -400.0]
+        
+        if solvable_indivs:
+            # Mean Baseline Fitness
+            base_vals = [ind.baseline_fitness for ind in solvable_indivs]
+            avg_base_fit = float(sum(base_vals) / len(base_vals))
+            
+            # Mean Solver Fitness
+            solver_vals = [
+                ind.solver_fitness
+                for ind in solvable_indivs
+                if ind.solver_fitness is not None
+            ]
+            avg_solver_fit = (
+                float(sum(solver_vals) / len(solver_vals)) if solver_vals else 0.0
+            )
+        else:
+            # No solvable maze in Archive
+            avg_base_fit = 0.0
+            avg_solver_fit = 0.0
 
         maze_logs.append(
             {
@@ -311,7 +335,7 @@ def run_coevolution_experiment(
             final_best_theta = best_solver.theta.copy()
             final_viz_envs = pick_solvable_envs(archive, rng, k=5)
 
-    return solver_logs, maze_logs, final_best_theta, final_viz_envs, archive_snapshots
+    return solver_logs, maze_logs, final_best_theta, final_viz_envs, archive_snapshots, phase1_logs
 
 
 
