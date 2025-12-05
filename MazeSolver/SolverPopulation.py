@@ -71,31 +71,27 @@ def evaluate_on_envs(
         for env in envs:
             maze = Maze(env.genome)
 
-            # 1) baseline: shortest path S->G, ignore CP
-            base_fit, baseline_steps = maze.evaluate_structure_noCP()
-            baseline_steps = float(max(1.0, baseline_steps))
-
-            # 2) solver run: raw_steps & cp_ratio
+            # 1) baseline
+            _, baseline_steps = maze.evaluate_structure_noCP()
+            
+            # 2) solver run
             success, raw_steps, cp_ratio = solver.solve_with_stats(maze)
-            raw_steps = float(max(1.0, raw_steps))
-            cp_ratio = float(np.clip(cp_ratio, 0.0, 1.0))
-
-            # fail condition
-            if not success:
-                max_steps = int(solver.max_steps_factor * maze.height * maze.width)
-                raw_steps = float(max_steps)
-                # fail condition will not count cp_ratio
-                cp_factor = (1.0 - alpha_cp)
-            else:
-                # If success, count CP ratio
-                cp_factor = (1.0 - alpha_cp) + alpha_cp * cp_ratio
-
-            # 3) Find speed ratio baseline / solver
-            speed_ratio = baseline_steps / raw_steps
-
-            # 4) Use Multi
-            rel_score = speed_ratio * cp_factor
-            rel_score = float(np.clip(rel_score, 0.0, 1.0))
+            
+            # A. Completion Points
+            completion_score = 1.0 if success else 0.0
+            
+            # B. CP Points
+            task_score = 2.0 * cp_ratio
+            
+            # C. Eff Points
+            max_tolerable_steps = maze.height * maze.width * 2
+            efficiency_score = max(0.0, 1.0 - (raw_steps / max_tolerable_steps))
+            # MAX = 1.0 + 2.0 + 0.5 = 3.5
+            score_env = completion_score + task_score + (0.5 * efficiency_score)
+            
+            # Normal 0~1
+            rel_score = score_env / 3.5
+            
 
             total_score += rel_score
             count += 1

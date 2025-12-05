@@ -447,14 +447,12 @@ class GreedySolver(ISolver):
                     # Base heuristic
                     h = self._heuristic(maze, nr, nc, remaining)
 
-                    # --- NEW: History Penalty ---
                     # If (nr, nc) is in our short-term memory, add a huge penalty.
                     # This forces the solver to explore new cells instead of oscillating.
                     if (nr, nc) in history:
                         # Count how many times we visited it recently (optional, or just static penalty)
                         visits = history.count((nr, nc))
                         h += self.repeat_penalty * visits
-                    # -----------------------------
 
                     candidates.append((h, nr, nc, new_mask))
 
