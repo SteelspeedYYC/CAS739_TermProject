@@ -2,6 +2,7 @@ import heapq
 import numpy as np
 from Maze.Maze import Maze
 from .ISolver import ISolver
+from collections import deque
 
 
 class AStarSolver(ISolver):
@@ -171,13 +172,19 @@ class GreedySolver(ISolver):
         self,
         theta: np.ndarray,
         max_steps_factor: float = 4.0,
+        memory_length: int = 20,  # size of short-term memory
+        repeat_penalty: float = 100.0, # penalty for revisiting
     ) -> None:
         """
         theta: Parameter Vector For The Heuristic h_theta(s).
         max_steps_factor: Max Steps = factor * (H * W) Per Episode.
+        memory_length: How many recent steps to remember to avoid loops.
+        repeat_penalty: Heuristic penalty for stepping on a recently visited cell.
         """
         self.theta = theta.astype(float)
         self.max_steps_factor = float(max_steps_factor)
+        self.memory_length = int(memory_length)
+        self.repeat_penalty = float(repeat_penalty)
 
     # Feature / Heuristic
 
@@ -239,8 +246,9 @@ class GreedySolver(ISolver):
                 remaining.append((r, c))
         return remaining
 
-    # Greedy Solve
 
+    # Greedy Solve
+    # NO MORE USE!!!
     def solve(self, maze: Maze) -> tuple[bool, int]:
         """
         Greedy Walk:
@@ -368,15 +376,12 @@ class GreedySolver(ISolver):
         effective_steps = max(1, min(max_steps, effective_steps))
 
         return False, effective_steps
-    
+
+
     # Add another solve func, can also return cp pass ratio
     def solve_with_stats(self, maze: Maze) -> tuple[bool, int, float]:
         """
-        Same As solve(), But Also Return cp_ratio:
-
-            success: Whether Goal Is Reached.
-            steps:   The 'raw' step count before CP bonus.
-            cp_ratio: Fraction Of Checkpoints Visited (0~1).
+        Modified solve method with Tabu List (Short-Term Memory) to prevent oscillation.
         """
         checkpoints = maze._get_checkpoints()
         k = len(checkpoints)
@@ -404,10 +409,10 @@ class GreedySolver(ISolver):
 
         directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
         visited_cp_count = bin(start_mask).count("1")
-        min_goal_dist = abs(sr - gr) + abs(sc - gc)
-
-        prev_pos: tuple[int, int] | None = None
-        backtrack_penalty = 5.0
+        
+        # Stores (r, c) of the last N steps
+        history = deque(maxlen=self.memory_length)
+        history.append((r, c))
 
         while steps < max_steps:
             if (r, c) == (gr, gc):
@@ -421,6 +426,8 @@ class GreedySolver(ISolver):
             best_h = None
             best_state: tuple[int, int, int] | None = None
 
+            # 1. Collect valid moves
+            candidates = []
             for dr, dc in directions:
                 nr, nc = r + dr, c + dc
                 if 0 <= nr < maze.height and 0 <= nc < maze.width:
@@ -436,30 +443,42 @@ class GreedySolver(ISolver):
                     remaining = self._remaining_checkpoints_from_mask(
                         checkpoints, new_mask
                     )
+                    
+                    # Base heuristic
                     h = self._heuristic(maze, nr, nc, remaining)
 
-                    if prev_pos is not None and (nr, nc) == prev_pos:
-                        h += backtrack_penalty
+                    # --- NEW: History Penalty ---
+                    # If (nr, nc) is in our short-term memory, add a huge penalty.
+                    # This forces the solver to explore new cells instead of oscillating.
+                    if (nr, nc) in history:
+                        # Count how many times we visited it recently (optional, or just static penalty)
+                        visits = history.count((nr, nc))
+                        h += self.repeat_penalty * visits
+                    # -----------------------------
 
-                    if best_h is None or h < best_h:
-                        best_h = h
-                        best_state = (nr, nc, new_mask)
+                    candidates.append((h, nr, nc, new_mask))
 
-            if best_state is None:
-                break
+            # 2. Pick best move
+            if not candidates:
+                break # Dead end with no moves
 
-            prev_pos = (r, c)
-            r, c, mask = best_state
+            # Sort by h (lowest is best)
+            # Add small random noise to break ties if h is identical
+            candidates.sort(key=lambda x: x[0] + np.random.uniform(0, 1e-6))
+            
+            best_h, next_r, next_c, next_mask = candidates[0]
+            
+            # Update state
+            r, c, mask = next_r, next_c, next_mask
             steps += 1
+            
+            # Update memory
+            history.append((r, c))
 
             visited_cp_count = max(
                 visited_cp_count,
                 bin(mask).count("1"),
             )
-
-            d_goal = abs(r - gr) + abs(c - gc)
-            if d_goal < min_goal_dist:
-                min_goal_dist = d_goal
 
         total_cp = len(checkpoints)
         cp_ratio = (

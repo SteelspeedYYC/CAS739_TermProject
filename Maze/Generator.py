@@ -28,7 +28,7 @@ class PerlinMazeGenerator(IGenerator):
         checkpoint_high: float = 0.5,
         cp_ratio: float = 0.05,
         min_cp: int = 1,
-        max_cp: int = 3, 
+        max_cp: int = 2, 
         # Noise parameter
         smooth_steps: int = 3,
         # Get consistent result with same seeds
