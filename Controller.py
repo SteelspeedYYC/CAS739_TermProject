@@ -259,53 +259,58 @@ class ExperimentController:
 
     def refresh_solver_fitness(
         self,
-        alpha_cp: float = 0.5,
+        alpha_cp: float = 0.5, # Kept for compatibility, though not strictly needed in new formula
     ) -> None:
         """
         Use current best solver to evaluate each maze in the archive and
         write solver_fitness as 'difficulty for the solver'.
 
-        Steps:
-        1. For each maze, compute baseline_steps via evaluate_structure_noCP().
-        2. Run GreedySolver.solve_with_stats() to get (raw_steps, cp_ratio).
-        3. Compute relative performance rel_score in [0, 1].
-        4. Define difficulty = 1 - rel_score, so higher means harder for solver.
-        5. Store indiv.solver_fitness = difficulty.
+        Difficulty = 1.0 - RelativeScore.
+        RelativeScore uses the NEW additive formula (Completion + Task + Efficiency).
         """
         if not self.solver_population:
             return
 
-        # 取当前 ES 里 fitness 最好的 solver
+        # Pick the best solver from current population
         best = max(self.solver_population, key=lambda s: s.fitness)
         solver = Solver.GreedySolver(theta=best.theta)
-
-        alpha_cp = float(alpha_cp)
-        alpha_cp = max(0.0, min(1.0, alpha_cp))
 
         for indiv in self.archive.iter_individuals():
             maze = Maze(indiv.genome)
 
-            # 1) baseline: BFS no-CP
-            _, baseline_steps = maze.evaluate_structure_noCP()
-            baseline_steps = float(max(1.0, baseline_steps))
+            # 1) baseline: BFS no-CP (Just for reference, not used in calc)
+            # _, baseline_steps = maze.evaluate_structure_noCP()
 
             # 2) solver stats
             success, raw_steps, cp_ratio = solver.solve_with_stats(maze)
             raw_steps = float(max(1.0, raw_steps))
-            cp_ratio = float(np.clip(cp_ratio, 0.0, 1.0))
+            
+            # --- 3) Use Additive Scoring (Must match SolverPopulation.py) ---
+            
+            # A. Completion Score
+            completion_score = 1.0 if success else 0.0
+            
+            # B. Task Score (High weight for Checkpoints)
+            task_score = 2.0 * cp_ratio
+            
+            # C. Efficiency Score (0~1)
+            # Assume max tolerable steps is 2 * area
+            max_tolerable = maze.height * maze.width * 2
+            efficiency_score = max(0.0, 1.0 - (raw_steps / max_tolerable))
+            
+            # Total Score (Theoretical Max = 1.0 + 2.0 + 0.5 = 3.5)
+            # Weight 0.5 given to efficiency
+            total_score_raw = completion_score + task_score + (0.5 * efficiency_score)
+            
+            # Normalize to [0, 1]
+            rel_score = total_score_raw / 3.5
+            
+            # 4) Difficulty Definition
+            # Lower score means harder for solver -> Higher Difficulty
+            difficulty = 1.0 - rel_score 
 
-            # 3) relative performance
-            speed_ratio = baseline_steps / raw_steps
-            cp_factor = (1.0 - alpha_cp) + alpha_cp * cp_ratio
-            rel_score = speed_ratio * cp_factor
-            rel_score = float(np.clip(rel_score, 0.0, 1.0))
-
-            # 4) difficulty for maze selection
-            difficulty = 1.0 - rel_score  # 越难对 solver 越高
-
-            # 5) write back
+            # 5) Write back to archive
             indiv.solver_fitness = difficulty
-
 
 
     # Specially made for early stage solver training

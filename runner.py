@@ -36,34 +36,27 @@ def update_solver_fitness_for_archive(ctrl: ExperimentController,
                                       best_theta: np.ndarray,
                                       alpha_cp: float = 0.5) -> None:
     """
-    Using current best solver for archive's mazes to calculate solver_fitness
-    Using same eval as SolverPopulation.evaluate_on_envs()
+    Using current best solver for archive's mazes to calculate solver_fitness.
+    UPDATED: Uses the new Additive Scoring formula.
     """
     solver = GreedySolver(theta=best_theta)
     for indiv in ctrl.archive.iter_individuals():
         maze = Maze(indiv.genome)
 
-        # baseline_noCP
-        _, baseline_steps = maze.evaluate_structure_noCP()
-        baseline_steps = float(max(1.0, baseline_steps))
-
+        # Solve
         success, raw_steps, cp_ratio = solver.solve_with_stats(maze)
         raw_steps = float(max(1.0, raw_steps))
-        cp_ratio = float(np.clip(cp_ratio, 0.0, 1.0))
 
-        # Failure condition
-        if not success:
-            max_steps = int(solver.max_steps_factor * maze.height * maze.width)
-            raw_steps = float(max_steps)
-            cp_factor = (1.0 - alpha_cp)
-        else:
-            cp_factor = (1.0 - alpha_cp) + alpha_cp * cp_ratio
-
-        speed_ratio = baseline_steps / raw_steps
-        rel_score = speed_ratio * cp_factor
-        rel_score = float(np.clip(rel_score, 0.0, 1.0))
-
-        indiv.solver_fitness = rel_score
+        # --- NEW Additive Formula ---
+        completion_score = 1.0 if success else 0.0
+        task_score = 2.0 * cp_ratio
+        max_tolerable = maze.height * maze.width * 2
+        efficiency_score = max(0.0, 1.0 - (raw_steps / max_tolerable))
+        
+        rel_score = (completion_score + task_score + 0.5 * efficiency_score) / 3.5
+        
+        # Difficulty = 1 - Score
+        indiv.solver_fitness = 1.0 - rel_score
 
 
 def snapshot_archive(archive: MapElitesArchive, gen: int) -> dict:
@@ -98,12 +91,16 @@ def snapshot_archive(archive: MapElitesArchive, gen: int) -> dict:
     }
 
 
+# (Need to update this function)
+
 def eval_solver_vs_baseline(theta: np.ndarray,
                             envs: list[Individual],
                             alpha_cp: float = 0.5) -> tuple[float, float, float]:
     """
-    eval solver on centain given mazes
-      - return (avg_solver_steps, avg_rel_score, avg_baseline_steps)
+    Eval solver on certain given mazes.
+    Returns: (avg_solver_steps, avg_rel_score, avg_baseline_steps)
+    
+    UPDATED: Uses the new Additive Scoring formula.
     """
     if not envs:
         return 0.0, 0.0, 0.0
@@ -117,25 +114,23 @@ def eval_solver_vs_baseline(theta: np.ndarray,
     for indiv in envs:
         maze = Maze(indiv.genome)
 
-        # baseline_noCP
+        # baseline (just for reference)
         _, baseline_steps = maze.evaluate_structure_noCP()
         baseline_steps = float(max(1.0, baseline_steps))
 
         success, raw_steps, cp_ratio = solver.solve_with_stats(maze)
         raw_steps = float(max(1.0, raw_steps))
-        cp_ratio = float(np.clip(cp_ratio, 0.0, 1.0))
-
-        # Same logic as evaluate_on_envs
-        if not success:
-            max_steps = int(solver.max_steps_factor * maze.height * maze.width)
-            raw_steps = float(max_steps)
-            cp_factor = (1.0 - alpha_cp)
-        else:
-            cp_factor = (1.0 - alpha_cp) + alpha_cp * cp_ratio
-
-        speed_ratio = baseline_steps / raw_steps
-        rel_score = speed_ratio * cp_factor
-        rel_score = float(np.clip(rel_score, 0.0, 1.0))
+        
+        # --- NEW Additive Formula (Unified) ---
+        completion_score = 1.0 if success else 0.0
+        task_score = 2.0 * cp_ratio
+        
+        max_tolerable = maze.height * maze.width * 2
+        efficiency_score = max(0.0, 1.0 - (raw_steps / max_tolerable))
+        
+        # Normalized [0, 1]
+        rel_score = (completion_score + task_score + 0.5 * efficiency_score) / 3.5
+        # --------------------------------------
 
         total_steps += raw_steps
         total_rel += rel_score
@@ -146,7 +141,6 @@ def eval_solver_vs_baseline(theta: np.ndarray,
     avg_rel = total_rel / count
     avg_base = total_base / count
     return avg_steps, avg_rel, avg_base
-
 
 # Main CoEV
 
